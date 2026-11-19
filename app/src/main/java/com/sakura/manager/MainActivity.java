@@ -45,7 +45,8 @@ public class MainActivity extends Activity {
   private void load(){try{products=new JSONArray(prefs.getString("products","[]"));}catch(Exception e){products=new JSONArray();}try{sales=new JSONArray(prefs.getString("sales","[]"));}catch(Exception e){sales=new JSONArray();}try{expenses=new JSONArray(prefs.getString("expenses","[]"));}catch(Exception e){expenses=new JSONArray();}try{orders=new JSONArray(prefs.getString("orders","[]"));}catch(Exception e){orders=new JSONArray();}}
   private void persist(){prefs.edit().putString("products",products.toString()).apply();}
   private void persistSales(){prefs.edit().putString("sales",sales.toString()).apply();}
-  private void persistExpenses(){prefs.edit().putString("expenses",expenses.toString()).apply();}\n  private void persistOrders(){prefs.edit().putString("orders",orders.toString()).apply();}
+  private void persistExpenses(){prefs.edit().putString("expenses",expenses.toString()).apply();}
+  private void persistOrders(){prefs.edit().putString("orders",orders.toString()).apply();}
   private int dp(int n){return (int)(n*getResources().getDisplayMetrics().density+.5f);}
   private GradientDrawable bg(int c,int r){GradientDrawable d=new GradientDrawable();d.setColor(c);d.setCornerRadius(dp(r));return d;}
   private TextView text(String s,int size,boolean bold){TextView t=new TextView(this);t.setText(s);t.setTextSize(size);t.setTextColor(ink);t.setGravity(Gravity.CENTER_VERTICAL);if(bold)t.setTypeface(Typeface.DEFAULT,Typeface.BOLD);return t;}
@@ -102,7 +103,8 @@ public class MainActivity extends Activity {
     salesSummary=text("",15,true);salesSummary.setPadding(dp(16),dp(16),dp(16),dp(16));salesSummary.setBackground(bg(Color.WHITE,18));LinearLayout.LayoutParams ssp=lp();ssp.topMargin=dp(12);page.addView(salesSummary,ssp);refreshSales();
     Button addSale=button("＋ تسجيل عملية بيع");LinearLayout.LayoutParams salep=lp();salep.topMargin=dp(10);page.addView(addSale,salep);addSale.setOnClickListener(v->saleDialog());
     Button salesHistory=button("سجل المبيعات");LinearLayout.LayoutParams histp=lp();histp.topMargin=dp(7);page.addView(salesHistory,histp);salesHistory.setOnClickListener(v->salesHistoryDialog());
-    Button orderButton=button("📦 طلبات المتجر");LinearLayout.LayoutParams orderP=lp();orderP.topMargin=dp(10);page.addView(orderButton,orderP);orderButton.setOnClickListener(v->fetchOrders());\n    Button addExpense=button("＋ إضافة إعلان / مصروف");LinearLayout.LayoutParams expP=lp();expP.topMargin=dp(8);page.addView(addExpense,expP);addExpense.setOnClickListener(v->expenseDialog());
+    Button orderButton=button("📦 طلبات المتجر");LinearLayout.LayoutParams orderP=lp();orderP.topMargin=dp(10);page.addView(orderButton,orderP);orderButton.setOnClickListener(v->fetchOrders());
+    Button addExpense=button("＋ إضافة إعلان / مصروف");LinearLayout.LayoutParams expP=lp();expP.topMargin=dp(8);page.addView(addExpense,expP);addExpense.setOnClickListener(v->expenseDialog());
     Button expenseHistory=button("سجل الإعلانات والمصروفات");LinearLayout.LayoutParams expHistP=lp();expHistP.topMargin=dp(7);page.addView(expenseHistory,expHistP);expenseHistory.setOnClickListener(v->expenseHistoryDialog());
     Button add=button("＋ إضافة منتج جديد");LinearLayout.LayoutParams ap=lp();ap.topMargin=dp(14);page.addView(add,ap);add.setOnClickListener(v->productDialog(-1));
     Button importCatalog=button("⇄ ربط كتالوج المتجر بالمخزون");LinearLayout.LayoutParams ip=lp();ip.topMargin=dp(8);page.addView(importCatalog,ip);importCatalog.setOnClickListener(v->syncCatalogToInventory());
@@ -237,7 +239,7 @@ public class MainActivity extends Activity {
           if(local==null && ("new".equalsIgnoreCase(o.optString("status"))||"pending".equalsIgnoreCase(o.optString("status")))){
             boolean ok=true;
             for(int j=0;j<items.length();j++){JSONObject it=items.optJSONObject(j);JSONObject p=findLocalProduct(it==null?"":it.optString("product_name"),it==null?"":it.optString("size"));if(p==null||p.optDouble("stock",0)<(it==null?0:it.optDouble("quantity",0))){ok=false;break;}}
-            if(ok){for(int j=0;j<items.length();j++){JSONObject it=items.optJSONObject(j);JSONObject p=findLocalProduct(it.optString("product_name"),it.optString("size"));p.put("stock",p.optDouble("stock")-it.optDouble("quantity"));}o.put("inventory_reserved",true);o.put("local_state","new");persist();}
+            if(ok){for(int j=0;j<items.length();j++){JSONObject it=items.optJSONObject(j);JSONObject p=findLocalProduct(it.optString("product_name"),it.optString("size"));p.put("reserved_stock",p.optDouble("reserved_stock")+it.optDouble("quantity"));}o.put("inventory_reserved",true);o.put("local_state","new");persist();}
             else {o.put("inventory_reserved",false);warning="\nتنبيه: بعض الطلبات لم يُخصم مخزونها لعدم كفاية الكمية أو عدم تطابق المنتج/الحجم.";}
           }else if(local!=null){o.put("inventory_reserved",local.optBoolean("inventory_reserved",false));o.put("local_state",local.optString("local_state",o.optString("status")));}
           merged.put(o);
@@ -256,23 +258,23 @@ public class MainActivity extends Activity {
     Spinner pick=new Spinner(this);java.util.ArrayList<String> labels=new java.util.ArrayList<>();for(int i=0;i<orders.length();i++){JSONObject o=orders.optJSONObject(i);if(o!=null&&"new".equalsIgnoreCase(o.optString("local_state",o.optString("status"))))labels.add("#"+o.optLong("id")+" — "+o.optString("customer_name"));}pick.setAdapter(new ArrayAdapter<String>(this,android.R.layout.simple_spinner_dropdown_item,labels));box.addView(pick);
     AlertDialog dlg=new AlertDialog.Builder(this).setTitle("طلبات المتجر ("+orders.length()+")").setView(box).setNegativeButton("إغلاق",null).setNeutralButton("تحديث",null).create();
     dlg.setOnShowListener(v->{dlg.getButton(-3).setOnClickListener(x->{dlg.dismiss();fetchOrders();});});
-    dlg.setButton(-1,"تم التسليم",(d,w)->{});dlg.setButton(-2,"إلغاء الطلب",(d,w)->{});
-    dlg.setOnShowListener(v->{dlg.getButton(-1).setOnClickListener(x->{int ix=pick.getSelectedItemPosition();JSONObject o=findPendingByIndex(ix);if(o!=null)changeOrderState(o,"delivered",dlg);});dlg.getButton(-2).setOnClickListener(x->{int ix=pick.getSelectedItemPosition();JSONObject o=findPendingByIndex(ix);if(o!=null)changeOrderState(o,"cancelled",dlg);});dlg.getButton(-3).setOnClickListener(x->{dlg.dismiss();fetchOrders();});});
+    dlg.setButton(-1,"تم الشحن",(d,w)->{});dlg.setButton(-2,"إلغاء الطلب",(d,w)->{});
+    dlg.setOnShowListener(v->{dlg.getButton(-1).setOnClickListener(x->{int ix=pick.getSelectedItemPosition();JSONObject o=findPendingByIndex(ix);if(o!=null)changeOrderState(o,"shipped",dlg);});dlg.getButton(-2).setOnClickListener(x->{int ix=pick.getSelectedItemPosition();JSONObject o=findPendingByIndex(ix);if(o!=null)changeOrderState(o,"cancelled",dlg);});dlg.getButton(-3).setOnClickListener(x->{dlg.dismiss();fetchOrders();});});
     dlg.show();
   }
   private JSONObject findPendingByIndex(int selected){if(selected<0)return null;int n=0;for(int i=0;i<orders.length();i++){JSONObject o=orders.optJSONObject(i);if(o!=null&&"new".equalsIgnoreCase(o.optString("local_state",o.optString("status")))){if(n++==selected)return o;}}return null;}
-  private String orderStatusLabel(String s){if("delivered".equalsIgnoreCase(s))return "تم التسليم";if("cancelled".equalsIgnoreCase(s))return "ملغي";return "طلب جديد";}
+  private String orderStatusLabel(String s){if("shipped".equalsIgnoreCase(s))return "تم الشحن";if("cancelled".equalsIgnoreCase(s))return "ملغي";return "طلب جديد";}
   private void changeOrderState(JSONObject o,String next,AlertDialog dlg){
     long id=o.optLong("id",-1);if(id<0)return;
     new Thread(()->{try{
       cloudPatch("/rest/v1/orders?id=eq."+id+"&status=eq."+o.optString("status"),new JSONObject().put("status",next));
       runOnUiThread(()->{try{
         JSONArray its=o.optJSONArray("items");
-        if("delivered".equals(next)){
+        if("shipped".equals(next)){
           boolean exists=false;for(int k=0;k<sales.length();k++)if(id==sales.optJSONObject(k).optLong("order_id",-2)){exists=true;break;}
           if(!exists&&its!=null)for(int j=0;j<its.length();j++){JSONObject it=its.optJSONObject(j);if(it==null)continue;JSONObject p=findLocalProduct(it.optString("product_name"),it.optString("size"));double q=it.optDouble("quantity"),price=it.optDouble("price"),cost=p==null?0:p.optDouble("cost");JSONObject sale=new JSONObject();sale.put("order_id",id);sale.put("product",it.optString("product_name"));sale.put("size",it.optString("size"));sale.put("quantity",q);sale.put("unit_price",price);sale.put("unit_cost",cost);sale.put("cost_total",q*cost);sale.put("shipping",0);sale.put("discount",0);sale.put("total",q*price);sale.put("date",new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm",Locale.US).format(new java.util.Date()));sales.put(sale);}
           persistSales();
-        }else if("cancelled".equals(next)&&o.optBoolean("inventory_reserved")&&its!=null){for(int j=0;j<its.length();j++){JSONObject it=its.optJSONObject(j);if(it==null)continue;JSONObject p=findLocalProduct(it.optString("product_name"),it.optString("size"));if(p!=null)p.put("stock",p.optDouble("stock")+it.optDouble("quantity"));}persist();}
+        }else if("cancelled".equals(next)&&o.optBoolean("inventory_reserved")&&its!=null){for(int j=0;j<its.length();j++){JSONObject it=its.optJSONObject(j);if(it==null)continue;JSONObject p=findLocalProduct(it.optString("product_name"),it.optString("size"));if(p!=null)p.put("reserved_stock",Math.max(0,p.optDouble("reserved_stock")-it.optDouble("quantity")));}persist();}
         o.put("status",next);o.put("local_state",next);o.put("inventory_reserved",false);persistOrders();refresh();dlg.dismiss();new AlertDialog.Builder(this).setMessage("تم تحديث الطلب: "+orderStatusLabel(next)).setPositiveButton("حسنًا",null).show();
       }catch(Exception ex){Toast.makeText(this,"حدث خطأ في تحديث الطلب محليًا",Toast.LENGTH_LONG).show();}});
     }catch(Exception ex){String m=ex.getMessage()==null?"تعذر تحديث حالة الطلب":ex.getMessage();runOnUiThread(()->new AlertDialog.Builder(this).setTitle("تعذر تحديث الطلب").setMessage(m).setPositiveButton("حسنًا",null).show());}}).start();
@@ -350,8 +352,8 @@ public class MainActivity extends Activity {
     for(int i=0;i<count;i++){JSONObject p=products.optJSONObject(i);if(p==null)continue;double q=p.optDouble("stock",0),c=p.optDouble("cost",0),price=p.optDouble("price",0);value+=q*c;retail+=q*price;
       LinearLayout card=new LinearLayout(this);card.setOrientation(1);card.setPadding(dp(15),dp(13),dp(15),dp(13));card.setBackground(bg(Color.WHITE,16));LinearLayout.LayoutParams cp=lp();cp.bottomMargin=dp(10);list.addView(card,cp);
       TextView name=text(p.optString("name","منتج"),17,true);card.addView(name);
-      TextView details=text(p.optString("size","Full Size")+"  •  المخزون: "+fmt(q)+"  •  سعر البيع: "+money(price),13,false);details.setTextColor(muted);details.setPadding(0,dp(5),0,dp(2));card.addView(details);
-      TextView cost=text("التكلفة للوحدة: "+money(c)+"  •  قيمة المخزون: "+money(q*c),13,false);cost.setTextColor(muted);card.addView(cost);
+      TextView details=text(p.optString("size","Full Size")+"  •  المخزون: "+fmt(q)+"  •  المحجوز: "+fmt(p.optDouble("reserved_stock"))+"  •  المتاح: "+fmt(Math.max(0,q-p.optDouble("reserved_stock")))+"  •  سعر البيع: "+money(price),13,false);details.setTextColor(muted);details.setPadding(0,dp(5),0,dp(2));card.addView(details);
+      TextView cost=text("التكلفة للوحدة: "+money(c)+"  •  قيمة المخزون بسعر البيع: "+money(q*price),13,false);cost.setTextColor(muted);card.addView(cost);
       LinearLayout actions=new LinearLayout(this);actions.setGravity(Gravity.END);Button edit=new Button(this);edit.setText("تعديل");edit.setAllCaps(false);edit.setOnClickListener(v->productDialog(indexOf(p)));Button del=new Button(this);del.setText("حذف");del.setAllCaps(false);del.setOnClickListener(v->new AlertDialog.Builder(this).setMessage("حذف المنتج من القائمة؟").setNegativeButton("إلغاء",null).setPositiveButton("حذف",(d,w)->{remove(indexOf(p));}).show());actions.addView(edit);actions.addView(del);card.addView(actions);
     }
     summary.setText("عدد المنتجات: "+count+"\nقيمة المخزون بالتكلفة: "+money(value)+"\nقيمة البيع المتوقعة: "+money(retail));
@@ -365,7 +367,7 @@ public class MainActivity extends Activity {
     for(int i=0;i<sales.length();i++){JSONObject s=sales.optJSONObject(i);if(s==null)continue;revenue+=s.optDouble("total",0);costTotal+=s.optDouble("cost_total",0);units+=s.optInt("quantity",0);}
     for(int i=0;i<expenses.length();i++){JSONObject e=expenses.optJSONObject(i);if(e==null)continue;double amount=e.optDouble("amount",0);if("إعلانات".equals(e.optString("category")))ads+=amount;else other+=amount;}
     double allExpenses=ads+other;
-    salesSummary.setText("ملخص المبيعات والأرباح\nإجمالي المبيعات: "+money(revenue)+"\nتكلفة المنتجات المباعة: "+money(costTotal)+"\nالربح قبل المصروفات: "+money(revenue-costTotal)+"\nمصروفات الإعلانات: "+money(ads)+"\nالمصروفات الأخرى: "+money(other)+"\nإجمالي المصروفات: "+money(allExpenses)+"\nصافي الربح بعد المصروفات: "+money(revenue-costTotal-allExpenses)+"\nالكمية المباعة: "+units);
+    double inventoryRetail=0;for(int i=0;i<products.length();i++){JSONObject p=products.optJSONObject(i);if(p!=null)inventoryRetail+=p.optDouble("stock")*p.optDouble("price");}\n    double totalCost=costTotal+allExpenses;\n    salesSummary.setText("إجمالي التكلفة شامل المصروفات والإعلانات: "+money(totalCost)+"\nإجمالي المبيعات: "+money(revenue)+"\nقيمة المخزون بسعر البيع: "+money(inventoryRetail)+"\nصافي الأرباح: "+money(revenue-totalCost));
   }
   private void expenseDialog(){
     LinearLayout form=new LinearLayout(this);form.setOrientation(1);form.setPadding(dp(18),dp(8),dp(18),dp(4));form.setLayoutDirection(View.LAYOUT_DIRECTION_RTL);
