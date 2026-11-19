@@ -26,9 +26,10 @@ public class MainActivity extends Activity {
   private static final String SUPABASE_KEY="sb_publishable_OvtdtOQMjkqOttkjKO7hAw_VPV47Upi";
   private static final String ADMIN_UID="d0d99fb5-37ab-4daa-8049-198996b326e0";
   private final int cream=Color.rgb(250,246,239), pink=Color.rgb(232,190,197), ink=Color.rgb(62,52,53), muted=Color.rgb(130,116,113);
-  private JSONArray products;
+  private JSONArray products, cloudProducts=new JSONArray(), cloudVariants=new JSONArray();
   private LinearLayout page, list;
-  private TextView summary;
+  private TextView summary, cloudStatus;
+  private LinearLayout cloudList;
   private android.content.SharedPreferences prefs;
   @Override public void onCreate(Bundle b){
     super.onCreate(b);
@@ -95,8 +96,56 @@ public class MainActivity extends Activity {
     Button add=button("＋ إضافة منتج جديد");LinearLayout.LayoutParams ap=lp();ap.topMargin=dp(14);page.addView(add,ap);add.setOnClickListener(v->productDialog(-1));
     TextView h=text("المنتجات",19,true);h.setPadding(0,dp(24),0,dp(10));page.addView(h);
     list=new LinearLayout(this);list.setOrientation(1);page.addView(list);refresh();
-    TextView foot=text("تسجيل الدخول متصل بـ Supabase. بيانات المنتجات ما زالت محفوظة محليًا؛ المزامنة السحابية لم تُفعّل بعد.",12,false);foot.setTextColor(muted);foot.setPadding(0,dp(24),0,0);page.addView(foot);
+    TextView cloudTitle=text("كتالوج المتجر المباشر",19,true);cloudTitle.setPadding(0,dp(26),0,dp(8));page.addView(cloudTitle);
+    Button sync=button("↻ تحديث منتجات المتجر");LinearLayout.LayoutParams syncp=lp();syncp.bottomMargin=dp(8);page.addView(sync,syncp);
+    cloudStatus=text("لم يتم تحميل كتالوج المتجر بعد",13,false);cloudStatus.setTextColor(muted);page.addView(cloudStatus);
+    cloudList=new LinearLayout(this);cloudList.setOrientation(1);page.addView(cloudList);
+    sync.setOnClickListener(v->fetchCloudCatalog());
+    fetchCloudCatalog();
+    TextView foot=text("المخزون والتكلفة يظلان محليين على هذا الجهاز. كتالوج المتجر وأسعاره تُقرأ مباشرة من Supabase.",12,false);foot.setTextColor(muted);foot.setPadding(0,dp(24),0,0);page.addView(foot);
     setContentView(sc);
+  }
+  private void fetchCloudCatalog(){
+    if(cloudStatus!=null)cloudStatus.setText("جاري تحميل منتجات المتجر...");
+    new Thread(()->{
+      try{
+        JSONArray p=cloudGet("/rest/v1/products?select=id,name,description,image_url,active&active=eq.true&order=id.asc");
+        JSONArray v=cloudGet("/rest/v1/product_variants?select=id,product_id,size,price,active&active=eq.true&order=id.asc");
+        runOnUiThread(()->{cloudProducts=p;cloudVariants=v;renderCloudCatalog();});
+      }catch(Exception e){
+        runOnUiThread(()->{if(cloudStatus!=null)cloudStatus.setText("تعذر تحميل الكتالوج. تحقق من الإنترنت ثم اضغط تحديث.");});
+      }
+    }).start();
+  }
+  private JSONArray cloudGet(String path)throws Exception{
+    HttpURLConnection c=(HttpURLConnection)new URL(SUPABASE_URL+path).openConnection();
+    c.setRequestMethod("GET");c.setConnectTimeout(15000);c.setReadTimeout(15000);
+    c.setRequestProperty("apikey",SUPABASE_KEY);c.setRequestProperty("Accept","application/json");
+    int code=c.getResponseCode();InputStream is=code>=200&&code<300?c.getInputStream():c.getErrorStream();
+    ByteArrayOutputStream b=new ByteArrayOutputStream();byte[] buf=new byte[4096];int n;
+    while((n=is.read(buf))!=-1)b.write(buf,0,n);
+    String body=b.toString("UTF-8");c.disconnect();
+    if(code<200||code>=300)throw new Exception("Supabase HTTP "+code+": "+body);
+    return new JSONArray(body);
+  }
+  private void renderCloudCatalog(){
+    if(cloudList==null||cloudStatus==null)return;
+    cloudList.removeAllViews();
+    cloudStatus.setText("تم تحميل "+cloudProducts.length()+" منتجات و"+cloudVariants.length()+" حجم من المتجر");
+    for(int i=0;i<cloudProducts.length();i++){
+      JSONObject p=cloudProducts.optJSONObject(i);if(p==null)continue;
+      LinearLayout card=new LinearLayout(this);card.setOrientation(1);card.setPadding(dp(14),dp(12),dp(14),dp(12));card.setBackground(bg(Color.WHITE,15));
+      LinearLayout.LayoutParams cp=lp();cp.topMargin=dp(8);cloudList.addView(card,cp);
+      card.addView(text(p.optString("name","منتج"),16,true));
+      String desc=p.optString("description","");if(!desc.isEmpty()){TextView d=text(desc,12,false);d.setTextColor(muted);card.addView(d);}
+      boolean found=false;
+      for(int j=0;j<cloudVariants.length();j++){
+        JSONObject v=cloudVariants.optJSONObject(j);if(v==null||v.optLong("product_id",-1)!=p.optLong("id",-2))continue;
+        found=true;TextView line=text(v.optString("size","")+"  •  "+money(v.optDouble("price",0)),13,false);line.setTextColor(muted);line.setPadding(0,dp(5),0,0);card.addView(line);
+      }
+      if(!found){TextView none=text("لا توجد أحجام نشطة",12,false);none.setTextColor(muted);card.addView(none);}
+    }
+    if(cloudProducts.length()==0){TextView none=text("لا توجد منتجات نشطة في المتجر",13,false);cloudList.addView(none);}
   }
   private Button button(String s){Button b=new Button(this);b.setText(s);b.setAllCaps(false);b.setTextSize(16);b.setTextColor(ink);b.setBackground(bg(pink,20));return b;}
   private void refresh(){
