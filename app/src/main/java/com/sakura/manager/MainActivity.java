@@ -28,7 +28,7 @@ public class MainActivity extends Activity {
   private static final String SUPABASE_KEY="sb_publishable_OvtdtOQMjkqOttkjKO7hAw_VPV47Upi";
   private static final String ADMIN_UID="d0d99fb5-37ab-4daa-8049-198996b326e0";
   private final int cream=Color.rgb(250,246,239), pink=Color.rgb(232,190,197), ink=Color.rgb(62,52,53), muted=Color.rgb(130,116,113);
-  private JSONArray products, sales, cloudProducts=new JSONArray(), cloudVariants=new JSONArray();
+  private JSONArray products, sales, expenses, cloudProducts=new JSONArray(), cloudVariants=new JSONArray();
   private TextView salesSummary;
   private long pendingImageProductId=-1;
   private LinearLayout page, list;
@@ -42,9 +42,10 @@ public class MainActivity extends Activity {
     load();
     if(prefs.getString("access_token",null)==null) showLogin(); else render();
   }
-  private void load(){try{products=new JSONArray(prefs.getString("products","[]"));}catch(Exception e){products=new JSONArray();}try{sales=new JSONArray(prefs.getString("sales","[]"));}catch(Exception e){sales=new JSONArray();}}
+  private void load(){try{products=new JSONArray(prefs.getString("products","[]"));}catch(Exception e){products=new JSONArray();}try{sales=new JSONArray(prefs.getString("sales","[]"));}catch(Exception e){sales=new JSONArray();}try{expenses=new JSONArray(prefs.getString("expenses","[]"));}catch(Exception e){expenses=new JSONArray();}}
   private void persist(){prefs.edit().putString("products",products.toString()).apply();}
   private void persistSales(){prefs.edit().putString("sales",sales.toString()).apply();}
+  private void persistExpenses(){prefs.edit().putString("expenses",expenses.toString()).apply();}
   private int dp(int n){return (int)(n*getResources().getDisplayMetrics().density+.5f);}
   private GradientDrawable bg(int c,int r){GradientDrawable d=new GradientDrawable();d.setColor(c);d.setCornerRadius(dp(r));return d;}
   private TextView text(String s,int size,boolean bold){TextView t=new TextView(this);t.setText(s);t.setTextSize(size);t.setTextColor(ink);t.setGravity(Gravity.CENTER_VERTICAL);if(bold)t.setTypeface(Typeface.DEFAULT,Typeface.BOLD);return t;}
@@ -101,6 +102,8 @@ public class MainActivity extends Activity {
     salesSummary=text("",15,true);salesSummary.setPadding(dp(16),dp(16),dp(16),dp(16));salesSummary.setBackground(bg(Color.WHITE,18));LinearLayout.LayoutParams ssp=lp();ssp.topMargin=dp(12);page.addView(salesSummary,ssp);refreshSales();
     Button addSale=button("＋ تسجيل عملية بيع");LinearLayout.LayoutParams salep=lp();salep.topMargin=dp(10);page.addView(addSale,salep);addSale.setOnClickListener(v->saleDialog());
     Button salesHistory=button("سجل المبيعات");LinearLayout.LayoutParams histp=lp();histp.topMargin=dp(7);page.addView(salesHistory,histp);salesHistory.setOnClickListener(v->salesHistoryDialog());
+    Button addExpense=button("＋ إضافة إعلان / مصروف");LinearLayout.LayoutParams expP=lp();expP.topMargin=dp(8);page.addView(addExpense,expP);addExpense.setOnClickListener(v->expenseDialog());
+    Button expenseHistory=button("سجل الإعلانات والمصروفات");LinearLayout.LayoutParams expHistP=lp();expHistP.topMargin=dp(7);page.addView(expenseHistory,expHistP);expenseHistory.setOnClickListener(v->expenseHistoryDialog());
     Button add=button("＋ إضافة منتج جديد");LinearLayout.LayoutParams ap=lp();ap.topMargin=dp(14);page.addView(add,ap);add.setOnClickListener(v->productDialog(-1));
     Button importCatalog=button("⇄ ربط كتالوج المتجر بالمخزون");LinearLayout.LayoutParams ip=lp();ip.topMargin=dp(8);page.addView(importCatalog,ip);importCatalog.setOnClickListener(v->syncCatalogToInventory());
     TextView h=text("المنتجات",19,true);h.setPadding(0,dp(24),0,dp(10));page.addView(h);
@@ -294,9 +297,27 @@ public class MainActivity extends Activity {
 
   private void refreshSales(){
     if(salesSummary==null||sales==null)return;
-    double revenue=0,costTotal=0;int units=0;
+    double revenue=0,costTotal=0,ads=0,other=0;int units=0;
     for(int i=0;i<sales.length();i++){JSONObject s=sales.optJSONObject(i);if(s==null)continue;revenue+=s.optDouble("total",0);costTotal+=s.optDouble("cost_total",0);units+=s.optInt("quantity",0);}
-    salesSummary.setText("ملخص المبيعات\nإجمالي المبيعات: "+money(revenue)+"\nإجمالي تكلفة المنتجات المباعة: "+money(costTotal)+"\nإجمالي الربح: "+money(revenue-costTotal)+"\nالكمية المباعة: "+units);
+    for(int i=0;i<expenses.length();i++){JSONObject e=expenses.optJSONObject(i);if(e==null)continue;double amount=e.optDouble("amount",0);if("إعلانات".equals(e.optString("category")))ads+=amount;else other+=amount;}
+    double allExpenses=ads+other;
+    salesSummary.setText("ملخص المبيعات والأرباح\nإجمالي المبيعات: "+money(revenue)+"\nتكلفة المنتجات المباعة: "+money(costTotal)+"\nالربح قبل المصروفات: "+money(revenue-costTotal)+"\nمصروفات الإعلانات: "+money(ads)+"\nالمصروفات الأخرى: "+money(other)+"\nإجمالي المصروفات: "+money(allExpenses)+"\nصافي الربح بعد المصروفات: "+money(revenue-costTotal-allExpenses)+"\nالكمية المباعة: "+units);
+  }
+  private void expenseDialog(){
+    LinearLayout form=new LinearLayout(this);form.setOrientation(1);form.setPadding(dp(18),dp(8),dp(18),dp(4));form.setLayoutDirection(View.LAYOUT_DIRECTION_RTL);
+    Spinner category=new Spinner(this);String[] categories={"إعلانات","شحن","تغليف وعبوات","مواصلات","عمولات","مصاريف تشغيل","أخرى"};category.setAdapter(new ArrayAdapter<String>(this,android.R.layout.simple_spinner_dropdown_item,categories));
+    EditText amount=field("قيمة المصروف بالجنيه","");EditText note=field("بيان المصروف (اختياري)","");
+    form.addView(label("نوع المصروف"));form.addView(category);form.addView(amount);form.addView(note);
+    new AlertDialog.Builder(this).setTitle("إضافة إعلان / مصروف").setView(form).setNegativeButton("إلغاء",null).setPositiveButton("حفظ",(d,w)->{
+      try{double value=number(amount);if(value<=0)throw new Exception();JSONObject e=new JSONObject();e.put("category",category.getSelectedItem().toString());e.put("amount",value);e.put("note",note.getText().toString().trim());e.put("date",new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm",Locale.US).format(new java.util.Date()));expenses.put(e);persistExpenses();refreshSales();Toast.makeText(this,"تم تسجيل المصروف",Toast.LENGTH_SHORT).show();}
+      catch(Exception ex){Toast.makeText(this,"أدخل قيمة صحيحة أكبر من صفر",Toast.LENGTH_LONG).show();}
+    }).show();
+  }
+  private void expenseHistoryDialog(){
+    StringBuilder b=new StringBuilder();double total=0;
+    for(int i=expenses.length()-1;i>=0;i--){JSONObject e=expenses.optJSONObject(i);if(e==null)continue;double a=e.optDouble("amount",0);total+=a;b.append(e.optString("date")).append("\n").append(e.optString("category")).append(" • ").append(money(a)).append("\n");if(!e.optString("note","").isEmpty())b.append(e.optString("note")).append("\n");b.append("\n");}
+    if(b.length()==0)b.append("لا توجد مصروفات مسجلة بعد");else b.insert(0,"إجمالي المصروفات: "+money(total)+"\n\n");
+    new AlertDialog.Builder(this).setTitle("سجل الإعلانات والمصروفات").setMessage(b.toString()).setPositiveButton("إغلاق",null).show();
   }
   private void saleDialog(){
     if(products.length()==0){Toast.makeText(this,"أضف المنتجات أولاً",Toast.LENGTH_LONG).show();return;}
