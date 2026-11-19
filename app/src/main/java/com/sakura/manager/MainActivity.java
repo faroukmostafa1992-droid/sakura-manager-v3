@@ -246,7 +246,7 @@ public class MainActivity extends Activity {
           }else if(local!=null){o.put("inventory_reserved",local.optBoolean("inventory_reserved",false));o.put("local_state",local.optString("local_state",o.optString("status")));}
           merged.put(o);
         }
-        orders=merged;persistOrders();runOnUiThread(()->{showOrdersDialog(warning);refresh();});
+        orders=merged;persistOrders();final String warningMessage=warning;runOnUiThread(()->{showOrdersDialog(warningMessage);refresh();});
       }catch(Exception e){String msg=e.getMessage()==null?"تعذر تحميل الطلبات":e.getMessage();runOnUiThread(()->new AlertDialog.Builder(this).setTitle("طلبات المتجر").setMessage(msg).setPositiveButton("حسنًا",null).show());}
     }).start();
   }
