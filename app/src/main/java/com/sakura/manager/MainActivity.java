@@ -113,14 +113,14 @@ public class MainActivity extends Activity {
         JSONArray v=cloudGet("/rest/v1/product_variants?select=id,product_id,size,price,active&active=eq.true&order=id.asc");
         runOnUiThread(()->{cloudProducts=p;cloudVariants=v;renderCloudCatalog();});
       }catch(Exception e){
-        runOnUiThread(()->{if(cloudStatus!=null)cloudStatus.setText("تعذر تحميل الكتالوج. تحقق من الإنترنت ثم اضغط تحديث.");});
+        runOnUiThread(()->{if(cloudStatus!=null)cloudStatus.setText("فشل تحميل الكتالوج: "+(e.getMessage()==null?"خطأ غير معروف":e.getMessage()));});
       }
     }).start();
   }
   private JSONArray cloudGet(String path)throws Exception{
     HttpURLConnection c=(HttpURLConnection)new URL(SUPABASE_URL+path).openConnection();
     c.setRequestMethod("GET");c.setConnectTimeout(15000);c.setReadTimeout(15000);
-    c.setRequestProperty("apikey",SUPABASE_KEY);c.setRequestProperty("Accept","application/json");
+    c.setRequestProperty("apikey",SUPABASE_KEY);c.setRequestProperty("Authorization","Bearer "+prefs.getString("access_token",SUPABASE_KEY));c.setRequestProperty("Accept","application/json");
     int code=c.getResponseCode();InputStream is=code>=200&&code<300?c.getInputStream():c.getErrorStream();
     ByteArrayOutputStream b=new ByteArrayOutputStream();byte[] buf=new byte[4096];int n;
     while((n=is.read(buf))!=-1)b.write(buf,0,n);
