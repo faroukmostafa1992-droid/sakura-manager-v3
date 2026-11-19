@@ -24,6 +24,7 @@ import java.util.Locale;
 public class MainActivity extends Activity {
   private static final String SUPABASE_URL="https://hoqsljlpswkvflxnywdp.supabase.co";
   private static final String SUPABASE_KEY="sb_publishable_OvtdtOQMjkqOttkjKO7hAw_VPV47Upi";
+  private static final String ADMIN_UID="d0d99fb5-37ab-4daa-8049-198996b326e0";
   private final int cream=Color.rgb(250,246,239), pink=Color.rgb(232,190,197), ink=Color.rgb(62,52,53), muted=Color.rgb(130,116,113);
   private JSONArray products;
   private LinearLayout page, list;
@@ -70,6 +71,7 @@ public class MainActivity extends Activity {
           if(code>=200&&code<300&&response.has("access_token")){
             String token=response.getString("access_token"),refresh=response.optString("refresh_token","");
             String uid=response.optJSONObject("user")==null?"":response.getJSONObject("user").optString("id","");
+            if(!ADMIN_UID.equals(uid)){runOnUiThread(()->{status.setText("هذا الحساب غير مصرح له بإدارة Sakura");login.setEnabled(true);});return;}
             prefs.edit().putString("access_token",token).putString("refresh_token",refresh).putString("auth_uid",uid).apply();
             runOnUiThread(()->{password.setText("");render();});
           }else{
