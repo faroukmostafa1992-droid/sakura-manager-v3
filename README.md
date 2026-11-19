@@ -1,2 +1,12 @@
-# sakura-manager-v3
-Sakura manager 
+# Sakura Manager V3 — Starter
+
+مشروع Android تأسيسي بواجهة عربية RTL وألوان كريمي ووردي، مع GitHub Actions لبناء APK تجريبي.
+
+## تنبيه مهم
+هذه ليست النسخة التشغيلية الكاملة. لم يتم ربط Supabase أو تنفيذ إدارة المنتجات والمخزون والطلبات والمصروفات والتقارير والطباعة. لا تستخدمها لتسجيل عمليات حقيقية.
+
+## بناء APK
+ارفع محتويات هذا المجلد إلى المستودع `sakura-manager-v3` على فرع `main`. سيبدأ GitHub Actions تلقائياً. بعد نجاح التشغيل، نزّل artifact باسم `sakura-manager-v3-debug-apk` من تبويب Actions.
+
+## الأمان
+لا تضع مفاتيح Supabase السرية أو service-role في التطبيق. يجب فحص مخطط قاعدة البيانات الحالي وإعداد Auth وRLS وسياسات Storage وRPC قبل تفعيل المزامنة.
