@@ -36,5 +36,34 @@ create policy "Sakura admin manages routine banners"
   using (auth.uid() = 'd0d99fb5-37ab-4daa-8049-198996b326e0'::uuid)
   with check (auth.uid() = 'd0d99fb5-37ab-4daa-8049-198996b326e0'::uuid);
 
+
+-- Public catalog reads: only active products and variants are visible.
+drop policy if exists "Public reads active Sakura products" on public.products;
+create policy "Public reads active Sakura products"
+  on public.products for select
+  to anon, authenticated
+  using (active = true);
+
+drop policy if exists "Public reads active Sakura variants" on public.product_variants;
+create policy "Public reads active Sakura variants"
+  on public.product_variants for select
+  to anon, authenticated
+  using (active = true);
+
+-- Sakura admin can edit catalog fields and variant stock/prices.
+drop policy if exists "Sakura admin manages products" on public.products;
+create policy "Sakura admin manages products"
+  on public.products for all
+  to authenticated
+  using (auth.uid() = 'd0d99fb5-37ab-4daa-8049-198996b326e0'::uuid)
+  with check (auth.uid() = 'd0d99fb5-37ab-4daa-8049-198996b326e0'::uuid);
+
+drop policy if exists "Sakura admin manages variants" on public.product_variants;
+create policy "Sakura admin manages variants"
+  on public.product_variants for all
+  to authenticated
+  using (auth.uid() = 'd0d99fb5-37ab-4daa-8049-198996b326e0'::uuid)
+  with check (auth.uid() = 'd0d99fb5-37ab-4daa-8049-198996b326e0'::uuid);
+
 -- Keep the current order/order_items schema and checkout insertion flow unchanged.
 -- Stock is maintained per product variant so each size can sell out independently.
