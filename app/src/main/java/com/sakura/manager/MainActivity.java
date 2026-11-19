@@ -26,7 +26,8 @@ public class MainActivity extends Activity {
   private static final String SUPABASE_KEY="sb_publishable_OvtdtOQMjkqOttkjKO7hAw_VPV47Upi";
   private static final String ADMIN_UID="d0d99fb5-37ab-4daa-8049-198996b326e0";
   private final int cream=Color.rgb(250,246,239), pink=Color.rgb(232,190,197), ink=Color.rgb(62,52,53), muted=Color.rgb(130,116,113);
-  private JSONArray products, cloudProducts=new JSONArray(), cloudVariants=new JSONArray();
+  private JSONArray products, sales, cloudProducts=new JSONArray(), cloudVariants=new JSONArray();
+  private TextView salesSummary;
   private LinearLayout page, list;
   private TextView summary, cloudStatus;
   private LinearLayout cloudList;
@@ -38,8 +39,9 @@ public class MainActivity extends Activity {
     load();
     if(prefs.getString("access_token",null)==null) showLogin(); else render();
   }
-  private void load(){try{products=new JSONArray(prefs.getString("products","[]"));}catch(Exception e){products=new JSONArray();}}
+  private void load(){try{products=new JSONArray(prefs.getString("products","[]"));}catch(Exception e){products=new JSONArray();}try{sales=new JSONArray(prefs.getString("sales","[]"));}catch(Exception e){sales=new JSONArray();}}
   private void persist(){prefs.edit().putString("products",products.toString()).apply();}
+  private void persistSales(){prefs.edit().putString("sales",sales.toString()).apply();}
   private int dp(int n){return (int)(n*getResources().getDisplayMetrics().density+.5f);}
   private GradientDrawable bg(int c,int r){GradientDrawable d=new GradientDrawable();d.setColor(c);d.setCornerRadius(dp(r));return d;}
   private TextView text(String s,int size,boolean bold){TextView t=new TextView(this);t.setText(s);t.setTextSize(size);t.setTextColor(ink);t.setGravity(Gravity.CENTER_VERTICAL);if(bold)t.setTypeface(Typeface.DEFAULT,Typeface.BOLD);return t;}
@@ -93,6 +95,9 @@ public class MainActivity extends Activity {
     page.addView(text("إدارة Sakura Cosmetics",25,true));
     TextView note=text("إدارة المنتجات والمخزون • إصدار 3.2",14,false);note.setTextColor(muted);page.addView(note);
     summary=text("",15,true);summary.setPadding(dp(16),dp(16),dp(16),dp(16));summary.setBackground(bg(Color.WHITE,18));LinearLayout.LayoutParams sp=lp();sp.topMargin=dp(20);page.addView(summary,sp);
+    salesSummary=text("",15,true);salesSummary.setPadding(dp(16),dp(16),dp(16),dp(16));salesSummary.setBackground(bg(Color.WHITE,18));LinearLayout.LayoutParams ssp=lp();ssp.topMargin=dp(12);page.addView(salesSummary,ssp);refreshSales();
+    Button addSale=button("＋ تسجيل عملية بيع");LinearLayout.LayoutParams salep=lp();salep.topMargin=dp(10);page.addView(addSale,salep);addSale.setOnClickListener(v->saleDialog());
+    Button salesHistory=button("سجل المبيعات");LinearLayout.LayoutParams histp=lp();histp.topMargin=dp(7);page.addView(salesHistory,histp);salesHistory.setOnClickListener(v->salesHistoryDialog());
     Button add=button("＋ إضافة منتج جديد");LinearLayout.LayoutParams ap=lp();ap.topMargin=dp(14);page.addView(add,ap);add.setOnClickListener(v->productDialog(-1));
     Button importCatalog=button("⇄ ربط كتالوج المتجر بالمخزون");LinearLayout.LayoutParams ip=lp();ip.topMargin=dp(8);page.addView(importCatalog,ip);importCatalog.setOnClickListener(v->syncCatalogToInventory());
     TextView h=text("المنتجات",19,true);h.setPadding(0,dp(24),0,dp(10));page.addView(h);
@@ -195,7 +200,43 @@ public class MainActivity extends Activity {
       LinearLayout actions=new LinearLayout(this);actions.setGravity(Gravity.END);Button edit=new Button(this);edit.setText("تعديل");edit.setAllCaps(false);edit.setOnClickListener(v->productDialog(indexOf(p)));Button del=new Button(this);del.setText("حذف");del.setAllCaps(false);del.setOnClickListener(v->new AlertDialog.Builder(this).setMessage("حذف المنتج من القائمة؟").setNegativeButton("إلغاء",null).setPositiveButton("حذف",(d,w)->{remove(indexOf(p));}).show());actions.addView(edit);actions.addView(del);card.addView(actions);
     }
     summary.setText("عدد المنتجات: "+count+"\nقيمة المخزون بالتكلفة: "+money(value)+"\nقيمة البيع المتوقعة: "+money(retail));
+    refreshSales();
     if(count==0){TextView empty=text("لا توجد منتجات بعد. اضغط إضافة منتج جديد للبدء.",15,false);empty.setGravity(Gravity.CENTER);empty.setPadding(dp(12),dp(24),dp(12),dp(24));list.addView(empty);}
+  }
+
+  private void refreshSales(){
+    if(salesSummary==null||sales==null)return;
+    double revenue=0,costTotal=0;int units=0;
+    for(int i=0;i<sales.length();i++){JSONObject s=sales.optJSONObject(i);if(s==null)continue;revenue+=s.optDouble("total",0);costTotal+=s.optDouble("cost_total",0);units+=s.optInt("quantity",0);}
+    salesSummary.setText("ملخص المبيعات\nإجمالي المبيعات: "+money(revenue)+"\nإجمالي تكلفة المنتجات المباعة: "+money(costTotal)+"\nإجمالي الربح: "+money(revenue-costTotal)+"\nالكمية المباعة: "+units);
+  }
+  private void saleDialog(){
+    if(products.length()==0){Toast.makeText(this,"أضف المنتجات أولاً",Toast.LENGTH_LONG).show();return;}
+    java.util.ArrayList<Integer> available=new java.util.ArrayList<>();java.util.ArrayList<String> names=new java.util.ArrayList<>();
+    for(int i=0;i<products.length();i++){JSONObject p=products.optJSONObject(i);if(p!=null){available.add(i);names.add(p.optString("name")+" - "+p.optString("size")+" (متاح "+fmt(p.optDouble("stock"))+")");}}
+    if(names.isEmpty())return;
+    LinearLayout form=new LinearLayout(this);form.setOrientation(1);form.setPadding(dp(18),dp(8),dp(18),dp(4));form.setLayoutDirection(View.LAYOUT_DIRECTION_RTL);
+    Spinner product=new Spinner(this);product.setAdapter(new ArrayAdapter<String>(this,android.R.layout.simple_spinner_dropdown_item,names));
+    EditText quantity=field("الكمية المباعة","1");EditText shipping=field("الشحن (اختياري)","0");EditText discount=field("الخصم (اختياري)","0");
+    form.addView(label("المنتج"));form.addView(product);form.addView(quantity);form.addView(shipping);form.addView(discount);
+    new AlertDialog.Builder(this).setTitle("تسجيل عملية بيع").setView(form).setNegativeButton("إلغاء",null).setPositiveButton("تسجيل",(d,w)->{
+      try{
+        int idx=available.get(product.getSelectedItemPosition());JSONObject p=products.optJSONObject(idx);
+        double q=number(quantity),ship=number(shipping),disc=number(discount),stock=p.optDouble("stock",0);
+        if(q<=0||q>stock||ship<0||disc<0)throw new Exception();
+        double unitPrice=p.optDouble("price",0),unitCost=p.optDouble("cost",0),subtotal=q*unitPrice,total=subtotal+ship-disc;
+        if(total<0)throw new Exception();
+        JSONObject sale=new JSONObject();sale.put("product",p.optString("name"));sale.put("size",p.optString("size"));sale.put("quantity",q);sale.put("unit_price",unitPrice);sale.put("unit_cost",unitCost);sale.put("cost_total",q*unitCost);sale.put("shipping",ship);sale.put("discount",disc);sale.put("total",total);sale.put("date",new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm",Locale.US).format(new java.util.Date()));
+        sales.put(sale);p.put("stock",stock-q);persist();persistSales();refresh();refreshSales();
+        Toast.makeText(this,"تم تسجيل البيع وخصم الكمية من المخزون",Toast.LENGTH_LONG).show();
+      }catch(Exception ex){Toast.makeText(this,"راجع الكمية والمخزون والشحن والخصم",Toast.LENGTH_LONG).show();}
+    }).show();
+  }
+  private void salesHistoryDialog(){
+    StringBuilder b=new StringBuilder();
+    for(int i=sales.length()-1;i>=0;i--){JSONObject s=sales.optJSONObject(i);if(s==null)continue;b.append(s.optString("date")).append("\n").append(s.optString("product")).append(" ").append(s.optString("size")).append(" × ").append(fmt(s.optDouble("quantity"))).append("\n").append("المبيعات: ").append(money(s.optDouble("total"))).append(" • التكلفة: ").append(money(s.optDouble("cost_total"))).append("\n\n");}
+    if(b.length()==0)b.append("لا توجد عمليات بيع مسجلة بعد");
+    new AlertDialog.Builder(this).setTitle("سجل المبيعات").setMessage(b.toString()).setPositiveButton("إغلاق",null).show();
   }
   private int indexOf(JSONObject obj){for(int i=0;i<products.length();i++)if(products.optJSONObject(i)==obj)return i;return -1;}
   private void remove(int i){if(i<0)return;JSONArray n=new JSONArray();for(int j=0;j<products.length();j++)if(j!=i)n.put(products.opt(j));products=n;persist();refresh();}
