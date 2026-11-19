@@ -157,6 +157,7 @@ public class MainActivity extends Activity {
           bytes=out.toByteArray();
         }
         String path="products/"+productId+"_"+java.util.UUID.randomUUID().toString().replace("-","")+"."+ext;
+        if(!refreshSession())throw new Exception("انتهت جلسة الدخول. سجّل الدخول مرة أخرى.");
         String token=prefs.getString("access_token","");
         if(token.isEmpty())throw new Exception("انتهت جلسة الدخول. سجّل الدخول مرة أخرى.");
         HttpURLConnection upload=(HttpURLConnection)new URL(SUPABASE_URL+"/storage/v1/object/sakura-products/"+path).openConnection();
@@ -188,16 +189,35 @@ public class MainActivity extends Activity {
       return b.toString("UTF-8");
     }
   }
-  private JSONArray cloudGet(String path)throws Exception{
-    HttpURLConnection c=(HttpURLConnection)new URL(SUPABASE_URL+path).openConnection();
-    c.setRequestMethod("GET");c.setConnectTimeout(15000);c.setReadTimeout(15000);
-    c.setRequestProperty("apikey",SUPABASE_KEY);c.setRequestProperty("Authorization","Bearer "+prefs.getString("access_token",SUPABASE_KEY));c.setRequestProperty("Accept","application/json");
+  private synchronized boolean refreshSession()throws Exception{
+    String refresh=prefs.getString("refresh_token","");
+    if(refresh.isEmpty())return false;
+    HttpURLConnection c=(HttpURLConnection)new URL(SUPABASE_URL+"/auth/v1/token?grant_type=refresh_token").openConnection();
+    c.setRequestMethod("POST");c.setConnectTimeout(15000);c.setReadTimeout(15000);c.setDoOutput(true);
+    c.setRequestProperty("apikey",SUPABASE_KEY);c.setRequestProperty("Content-Type","application/json");
+    JSONObject req=new JSONObject();req.put("refresh_token",refresh);
+    try(OutputStream os=c.getOutputStream()){os.write(req.toString().getBytes(StandardCharsets.UTF_8));}
     int code=c.getResponseCode();InputStream is=code>=200&&code<300?c.getInputStream():c.getErrorStream();
-    ByteArrayOutputStream b=new ByteArrayOutputStream();byte[] buf=new byte[4096];int n;
-    while((n=is.read(buf))!=-1)b.write(buf,0,n);
-    String body=b.toString("UTF-8");c.disconnect();
-    if(code<200||code>=300)throw new Exception("Supabase HTTP "+code+": "+body);
-    return new JSONArray(body);
+    String body=readBody(is);c.disconnect();
+    if(code<200||code>=300)throw new Exception("انتهت جلسة الدخول. سجّل الدخول مرة أخرى: "+body);
+    JSONObject res=new JSONObject(body);String uid=res.optJSONObject("user")==null?"":res.getJSONObject("user").optString("id","");
+    if(!ADMIN_UID.equals(uid))throw new Exception("حساب الإدارة غير مصرح له");
+    prefs.edit().putString("access_token",res.getString("access_token")).putString("refresh_token",res.optString("refresh_token",refresh)).putString("auth_uid",uid).apply();
+    return true;
+  }
+  private JSONArray cloudGet(String path)throws Exception{
+    for(int attempt=0;attempt<2;attempt++){
+      String token=prefs.getString("access_token",SUPABASE_KEY);
+      HttpURLConnection c=(HttpURLConnection)new URL(SUPABASE_URL+path).openConnection();
+      c.setRequestMethod("GET");c.setConnectTimeout(15000);c.setReadTimeout(15000);
+      c.setRequestProperty("apikey",SUPABASE_KEY);c.setRequestProperty("Authorization","Bearer "+token);c.setRequestProperty("Accept","application/json");
+      int code=c.getResponseCode();InputStream is=code>=200&&code<300?c.getInputStream():c.getErrorStream();
+      String body=readBody(is);c.disconnect();
+      if(code>=200&&code<300)return new JSONArray(body);
+      if(code==401&&attempt==0&&refreshSession())continue;
+      throw new Exception("Supabase HTTP "+code+": "+body);
+    }
+    throw new Exception("تعذر تجديد جلسة الدخول");
   }
   private void renderCloudCatalog(){
     if(cloudList==null||cloudStatus==null)return;
