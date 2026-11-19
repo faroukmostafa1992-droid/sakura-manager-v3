@@ -247,7 +247,7 @@ public class MainActivity extends Activity {
     LinearLayout form=new LinearLayout(this);form.setOrientation(1);form.setPadding(dp(18),dp(8),dp(18),dp(4));form.setLayoutDirection(View.LAYOUT_DIRECTION_RTL);
     EditText name=field("اسم المنتج",old==null?"":old.optString("name"));
     EditText category=field("التصنيف",old==null?"":old.optString("category"));
-    Spinner size=new Spinner(this);String[] sizes={"10ml","Full Size"};size.setAdapter(new ArrayAdapter<String>(this,android.R.layout.simple_spinner_dropdown_item,sizes));size.setSelection(old!=null&&old.optString("size").equals("10ml")?0:1);
+    EditText size=field("حجم المنتج (مثال: 10ml أو 30ml أو 50ml أو Full Size)",old==null?"10ml":old.optString("size","10ml"));
     EditText stock=field("الكمية المتاحة",old==null?"0":fmt(old.optDouble("stock")));
     EditText cost=field("تكلفة الوحدة بالجنيه",old==null?"0":fmt(old.optDouble("cost")));
     EditText price=field("سعر البيع بالجنيه",old==null?"0":fmt(old.optDouble("price")));
@@ -255,7 +255,8 @@ public class MainActivity extends Activity {
     new AlertDialog.Builder(this).setTitle(index<0?"إضافة منتج":"تعديل المنتج").setView(form).setNegativeButton("إلغاء",null).setPositiveButton("حفظ",(d,w)->{
       String n=name.getText().toString().trim();if(n.isEmpty()){Toast.makeText(this,"اكتب اسم المنتج",Toast.LENGTH_SHORT).show();return;}
       try{double q=number(stock),c=number(cost),pr=number(price);if(q<0||c<0||pr<0)throw new Exception();
-        JSONObject p=old==null?new JSONObject():old;p.put("name",n);p.put("category",category.getText().toString().trim());p.put("size",size.getSelectedItem().toString());p.put("stock",q);p.put("cost",c);p.put("price",pr);
+        String productSize=size.getText().toString().trim();if(productSize.isEmpty())throw new Exception();
+        JSONObject p=old==null?new JSONObject():old;p.put("name",n);p.put("category",category.getText().toString().trim());p.put("size",productSize);p.put("stock",q);p.put("cost",c);p.put("price",pr);
         if(index<0)products.put(p);persist();refresh();
       }catch(Exception e){Toast.makeText(this,"راجع الكمية والأسعار المدخلة",Toast.LENGTH_LONG).show();}
     }).show();
