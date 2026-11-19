@@ -32,7 +32,8 @@ public class MainActivity extends Activity {
   private TextView salesSummary;
   private long pendingImageProductId=-1;
   private LinearLayout page, list;
-  private TextView summary, cloudStatus;\n  private AlertDialog ordersDialog;
+  private TextView summary, cloudStatus;
+  private AlertDialog ordersDialog;
   private LinearLayout cloudList;
   private android.content.SharedPreferences prefs;
   @Override public void onCreate(Bundle b){
@@ -43,7 +44,8 @@ public class MainActivity extends Activity {
     if(prefs.getString("access_token",null)==null) showLogin(); else render();
   }
   private void load(){try{products=new JSONArray(prefs.getString("products","[]"));}catch(Exception e){products=new JSONArray();}try{sales=new JSONArray(prefs.getString("sales","[]"));}catch(Exception e){sales=new JSONArray();}try{expenses=new JSONArray(prefs.getString("expenses","[]"));}catch(Exception e){expenses=new JSONArray();}try{orders=new JSONArray(prefs.getString("orders","[]"));}catch(Exception e){orders=new JSONArray();}migrateLegacyReservations();}
-  private void migrateLegacyReservations(){if(prefs.getBoolean("reservation_migration_v1",false))return;try{for(int i=0;i<orders.length();i++){JSONObject o=orders.optJSONObject(i);if(o==null||!o.optBoolean("inventory_reserved"))continue;String state=o.optString("local_state",o.optString("status"));if(!("new".equalsIgnoreCase(state)||"pending".equalsIgnoreCase(state)))continue;JSONArray its=o.optJSONArray("items");if(its==null)continue;for(int j=0;j<its.length();j++){JSONObject it=its.optJSONObject(j);if(it==null)continue;JSONObject p=findLocalProduct(it.optString("product_name"),it.optString("size"));if(p!=null){double q=it.optDouble("quantity");p.put("stock",p.optDouble("stock")+q);p.put("reserved_stock",p.optDouble("reserved_stock")+q);}}}prefs.edit().putBoolean("reservation_migration_v1",true).apply();persist();persistOrders();}catch(Exception ignored){}}\n  private void persist(){prefs.edit().putString("products",products.toString()).apply();}
+  private void migrateLegacyReservations(){if(prefs.getBoolean("reservation_migration_v1",false))return;try{for(int i=0;i<orders.length();i++){JSONObject o=orders.optJSONObject(i);if(o==null||!o.optBoolean("inventory_reserved"))continue;String state=o.optString("local_state",o.optString("status"));if(!("new".equalsIgnoreCase(state)||"pending".equalsIgnoreCase(state)))continue;JSONArray its=o.optJSONArray("items");if(its==null)continue;for(int j=0;j<its.length();j++){JSONObject it=its.optJSONObject(j);if(it==null)continue;JSONObject p=findLocalProduct(it.optString("product_name"),it.optString("size"));if(p!=null){double q=it.optDouble("quantity");p.put("stock",p.optDouble("stock")+q);p.put("reserved_stock",p.optDouble("reserved_stock")+q);}}}prefs.edit().putBoolean("reservation_migration_v1",true).apply();persist();persistOrders();}catch(Exception ignored){}}
+  private void persist(){prefs.edit().putString("products",products.toString()).apply();}
   private void persistSales(){prefs.edit().putString("sales",sales.toString()).apply();}
   private void persistExpenses(){prefs.edit().putString("expenses",expenses.toString()).apply();}
   private void persistOrders(){prefs.edit().putString("orders",orders.toString()).apply();}
