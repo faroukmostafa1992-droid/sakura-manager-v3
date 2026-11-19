@@ -94,6 +94,7 @@ public class MainActivity extends Activity {
     TextView note=text("إدارة المنتجات والمخزون • إصدار 3.2",14,false);note.setTextColor(muted);page.addView(note);
     summary=text("",15,true);summary.setPadding(dp(16),dp(16),dp(16),dp(16));summary.setBackground(bg(Color.WHITE,18));LinearLayout.LayoutParams sp=lp();sp.topMargin=dp(20);page.addView(summary,sp);
     Button add=button("＋ إضافة منتج جديد");LinearLayout.LayoutParams ap=lp();ap.topMargin=dp(14);page.addView(add,ap);add.setOnClickListener(v->productDialog(-1));
+    Button importCatalog=button("⇄ ربط كتالوج المتجر بالمخزون");LinearLayout.LayoutParams ip=lp();ip.topMargin=dp(8);page.addView(importCatalog,ip);importCatalog.setOnClickListener(v->syncCatalogToInventory());
     TextView h=text("المنتجات",19,true);h.setPadding(0,dp(24),0,dp(10));page.addView(h);
     list=new LinearLayout(this);list.setOrientation(1);page.addView(list);refresh();
     TextView cloudTitle=text("كتالوج المتجر المباشر",19,true);cloudTitle.setPadding(0,dp(26),0,dp(8));page.addView(cloudTitle);
@@ -146,6 +147,42 @@ public class MainActivity extends Activity {
       if(!found){TextView none=text("لا توجد أحجام نشطة",12,false);none.setTextColor(muted);card.addView(none);}
     }
     if(cloudProducts.length()==0){TextView none=text("لا توجد منتجات نشطة في المتجر",13,false);cloudList.addView(none);}
+  }
+  private void syncCatalogToInventory(){
+    if(cloudProducts.length()==0){Toast.makeText(this,"حمّل كتالوج المتجر أولاً",Toast.LENGTH_LONG).show();return;}
+    int added=0,updated=0;
+    try{
+      for(int i=0;i<cloudProducts.length();i++){
+        JSONObject cp=cloudProducts.optJSONObject(i);if(cp==null)continue;
+        long productId=cp.optLong("id",-1);
+        for(int j=0;j<cloudVariants.length();j++){
+          JSONObject cv=cloudVariants.optJSONObject(j);if(cv==null||cv.optLong("product_id",-2)!=productId)continue;
+          String size=cv.optString("size","").trim();
+          if(size.equalsIgnoreCase("5ml")||size.equalsIgnoreCase("5 ml"))continue;
+          long variantId=cv.optLong("id",-1);
+          JSONObject local=null;
+          for(int k=0;k<products.length();k++){
+            JSONObject candidate=products.optJSONObject(k);if(candidate==null)continue;
+            boolean sameVariant=variantId>0&&candidate.optLong("cloud_variant_id",-2)==variantId;
+            boolean sameProductSize=candidate.optLong("cloud_product_id",-2)==productId&&candidate.optString("size","").equalsIgnoreCase(size);
+            boolean sameNameSize=candidate.optString("name","").equalsIgnoreCase(cp.optString("name",""))&&candidate.optString("size","").equalsIgnoreCase(size);
+            if(sameVariant||sameProductSize||sameNameSize){local=candidate;break;}
+          }
+          if(local==null){local=new JSONObject();local.put("stock",0);local.put("cost",0);products.put(local);added++;}
+          else updated++;
+          local.put("name",cp.optString("name","منتج"));
+          local.put("category","Korean skincare");
+          local.put("size",size);
+          local.put("price",cv.optDouble("price",0));
+          local.put("cloud_product_id",productId);
+          local.put("cloud_variant_id",variantId);
+          local.put("description",cp.optString("description",""));
+          local.put("image_url",cp.optString("image_url",""));
+        }
+      }
+      persist();refresh();
+      Toast.makeText(this,"تم ربط الكتالوج بالمخزون. جديد: "+added+" • تم تحديث: "+updated+". الكميات والتكلفة المحلية محفوظة.",Toast.LENGTH_LONG).show();
+    }catch(Exception e){Toast.makeText(this,"تعذر ربط الكتالوج: "+e.getMessage(),Toast.LENGTH_LONG).show();}
   }
   private Button button(String s){Button b=new Button(this);b.setText(s);b.setAllCaps(false);b.setTextSize(16);b.setTextColor(ink);b.setBackground(bg(pink,20));return b;}
   private void refresh(){
