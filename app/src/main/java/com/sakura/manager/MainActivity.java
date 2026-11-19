@@ -397,7 +397,9 @@ public class MainActivity extends Activity {
     for(int i=0;i<sales.length();i++){JSONObject s=sales.optJSONObject(i);if(s==null)continue;revenue+=s.optDouble("total",0);costTotal+=s.optDouble("cost_total",0);units+=s.optInt("quantity",0);}
     for(int i=0;i<expenses.length();i++){JSONObject e=expenses.optJSONObject(i);if(e==null)continue;double amount=e.optDouble("amount",0);if("إعلانات".equals(e.optString("category")))ads+=amount;else other+=amount;}
     double allExpenses=ads+other;
-    double inventoryRetail=0;for(int i=0;i<products.length();i++){JSONObject p=products.optJSONObject(i);if(p!=null)inventoryRetail+=p.optDouble("stock")*p.optDouble("price");}\n    double totalCost=costTotal+allExpenses;\n    salesSummary.setText("إجمالي التكلفة شامل المصروفات والإعلانات: "+money(totalCost)+"\nإجمالي المبيعات: "+money(revenue)+"\nقيمة المخزون بسعر البيع: "+money(inventoryRetail)+"\nصافي الأرباح: "+money(revenue-totalCost));
+    double inventoryRetail=0;for(int i=0;i<products.length();i++){JSONObject p=products.optJSONObject(i);if(p!=null)inventoryRetail+=p.optDouble("stock")*p.optDouble("price");}
+    double totalCost=costTotal+allExpenses;
+    salesSummary.setText("إجمالي التكلفة شامل المصروفات والإعلانات: "+money(totalCost)+"\nإجمالي المبيعات: "+money(revenue)+"\nقيمة المخزون بسعر البيع: "+money(inventoryRetail)+"\nصافي الأرباح: "+money(revenue-totalCost));
   }
   private void expenseDialog(){
     LinearLayout form=new LinearLayout(this);form.setOrientation(1);form.setPadding(dp(18),dp(8),dp(18),dp(4));form.setLayoutDirection(View.LAYOUT_DIRECTION_RTL);
