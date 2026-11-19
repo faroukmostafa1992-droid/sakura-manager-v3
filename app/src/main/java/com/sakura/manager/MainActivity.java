@@ -251,32 +251,60 @@ public class MainActivity extends Activity {
   private JSONObject findOrder(long id){for(int i=0;i<orders.length();i++){JSONObject o=orders.optJSONObject(i);if(o!=null&&o.optLong("id",-2)==id)return o;}return null;}
   private JSONObject findLocalProduct(String name,String size){for(int i=0;i<products.length();i++){JSONObject p=products.optJSONObject(i);if(p!=null&&p.optString("name").trim().equalsIgnoreCase(name.trim())&&p.optString("size").trim().equalsIgnoreCase(size.trim()))return p;}return null;}
   private void showOrdersDialog(String warning){
-    StringBuilder b=new StringBuilder();for(int i=0;i<orders.length();i++){JSONObject o=orders.optJSONObject(i);if(o==null)continue;b.append("#").append(o.optLong("id")).append(" • ").append(o.optString("customer_name")).append(" • ").append(money(o.optDouble("total"))).append("\\n").append("الحالة: ").append(orderStatusLabel(o.optString("local_state",o.optString("status")))).append("\\n");JSONArray its=o.optJSONArray("items");if(its!=null)for(int j=0;j<its.length();j++){JSONObject it=its.optJSONObject(j);if(it!=null)b.append(" - ").append(it.optString("product_name")).append(" ").append(it.optString("size")).append(" × ").append(fmt(it.optDouble("quantity"))).append("\\n");}b.append("\\n");}
-    if(b.length()==0)b.append("لا توجد طلبات في المتجر حتى الآن.");b.append(warning==null?"":warning);
-    LinearLayout box=new LinearLayout(this);box.setOrientation(1);box.setPadding(dp(16),dp(8),dp(16),dp(8));box.setLayoutDirection(View.LAYOUT_DIRECTION_RTL);
-    ScrollView sc=new ScrollView(this);TextView content=text(b.toString(),14,false);content.setGravity(Gravity.TOP);sc.addView(content);box.addView(sc,new LinearLayout.LayoutParams(-1,dp(250)));
-    Spinner pick=new Spinner(this);java.util.ArrayList<String> labels=new java.util.ArrayList<>();for(int i=0;i<orders.length();i++){JSONObject o=orders.optJSONObject(i);if(o!=null&&"new".equalsIgnoreCase(o.optString("local_state",o.optString("status"))))labels.add("#"+o.optLong("id")+" — "+o.optString("customer_name"));}pick.setAdapter(new ArrayAdapter<String>(this,android.R.layout.simple_spinner_dropdown_item,labels));box.addView(pick);
-    AlertDialog dlg=new AlertDialog.Builder(this).setTitle("طلبات المتجر ("+orders.length()+")").setView(box).setNegativeButton("إغلاق",null).setNeutralButton("تحديث",null).create();
-    dlg.setOnShowListener(v->{dlg.getButton(-3).setOnClickListener(x->{dlg.dismiss();fetchOrders();});});
-    dlg.setButton(-1,"تم الشحن",(d,w)->{});dlg.setButton(-2,"إلغاء الطلب",(d,w)->{});
-    dlg.setOnShowListener(v->{dlg.getButton(-1).setOnClickListener(x->{int ix=pick.getSelectedItemPosition();JSONObject o=findPendingByIndex(ix);if(o!=null)changeOrderState(o,"shipped",dlg);});dlg.getButton(-2).setOnClickListener(x->{int ix=pick.getSelectedItemPosition();JSONObject o=findPendingByIndex(ix);if(o!=null)changeOrderState(o,"cancelled",dlg);});dlg.getButton(-3).setOnClickListener(x->{dlg.dismiss();fetchOrders();});});
-    dlg.show();
+    LinearLayout box=new LinearLayout(this);box.setOrientation(1);box.setPadding(dp(12),dp(8),dp(12),dp(8));box.setLayoutDirection(View.LAYOUT_DIRECTION_RTL);
+    ScrollView sc=new ScrollView(this);LinearLayout cards=new LinearLayout(this);cards.setOrientation(1);sc.addView(cards);
+    int pending=0;
+    for(int i=0;i<orders.length();i++){
+      JSONObject o=orders.optJSONObject(i);if(o==null)continue;
+      String state=o.optString("local_state",o.optString("status"));
+      if(!("new".equalsIgnoreCase(state)||"pending".equalsIgnoreCase(state)))continue;
+      pending++;
+      LinearLayout card=new LinearLayout(this);card.setOrientation(1);card.setPadding(dp(12),dp(10),dp(12),dp(10));card.setBackground(bg(Color.WHITE,14));
+      LinearLayout.LayoutParams cp=lp();cp.bottomMargin=dp(10);cards.addView(card,cp);
+      card.addView(text("طلب #"+o.optLong("id")+"  •  "+money(o.optDouble("total")),16,true));
+      card.addView(text(o.optString("customer_name")+"  •  "+o.optString("phone"),13,false));
+      card.addView(text("العنوان: "+o.optString("address"),13,false));
+      JSONArray its=o.optJSONArray("items");
+      if(its!=null)for(int j=0;j<its.length();j++){JSONObject it=its.optJSONObject(j);if(it!=null)card.addView(text("• "+it.optString("product_name")+" / "+it.optString("size")+" × "+fmt(it.optDouble("quantity"))+" — "+money(it.optDouble("price")*it.optDouble("quantity")),13,false));}
+      card.addView(text("تاريخ الطلب: "+o.optString("created_at"),12,false));
+      LinearLayout actions=new LinearLayout(this);actions.setGravity(Gravity.CENTER_VERTICAL);
+      Button ship=button("✓ تم الشحن"),cancel=button("✕ إلغاء");
+      LinearLayout.LayoutParams ap=new LinearLayout.LayoutParams(0,-2,1);ap.topMargin=dp(8);ap.leftMargin=dp(4);actions.addView(ship,ap);
+      LinearLayout.LayoutParams bp=new LinearLayout.LayoutParams(0,-2,1);bp.topMargin=dp(8);bp.rightMargin=dp(4);actions.addView(cancel,bp);card.addView(actions);
+      ship.setOnClickListener(v->changeOrderState(o,"shipped",null));
+      cancel.setOnClickListener(v->new AlertDialog.Builder(this).setMessage("إلغاء الطلب؟ لن يتم تسجيل مبيعات أو خصم نهائي للمخزون.").setNegativeButton("رجوع",null).setPositiveButton("تأكيد الإلغاء",(d,w)->changeOrderState(o,"cancelled",null)).show());
+    }
+    if(pending==0)cards.addView(text("لا توجد طلبات معلقة حاليًا.",14,false));
+    if(warning!=null&&!warning.isEmpty())cards.addView(text(warning,12,false));
+    box.addView(sc,new LinearLayout.LayoutParams(-1,dp(450)));
+    new AlertDialog.Builder(this).setTitle("طلبات المتجر ("+pending+")").setView(box).setPositiveButton("تحديث",(d,w)->fetchOrders()).setNegativeButton("إغلاق",null).show();
   }
-  private JSONObject findPendingByIndex(int selected){if(selected<0)return null;int n=0;for(int i=0;i<orders.length();i++){JSONObject o=orders.optJSONObject(i);if(o!=null&&"new".equalsIgnoreCase(o.optString("local_state",o.optString("status")))){if(n++==selected)return o;}}return null;}
   private String orderStatusLabel(String s){if("shipped".equalsIgnoreCase(s))return "تم الشحن";if("cancelled".equalsIgnoreCase(s))return "ملغي";return "طلب جديد";}
   private void changeOrderState(JSONObject o,String next,AlertDialog dlg){
     long id=o.optLong("id",-1);if(id<0)return;
     new Thread(()->{try{
       cloudPatch("/rest/v1/orders?id=eq."+id+"&status=eq."+o.optString("status"),new JSONObject().put("status",next));
       runOnUiThread(()->{try{
-        JSONArray its=o.optJSONArray("items");
+        JSONArray its=o.optJSONArray("items");double costTotal=0,qtyTotal=0;
+        if(its!=null)for(int j=0;j<its.length();j++){
+          JSONObject it=its.optJSONObject(j);if(it==null)continue;
+          JSONObject p=findLocalProduct(it.optString("product_name"),it.optString("size"));
+          double q=it.optDouble("quantity"),cost=p==null?0:p.optDouble("cost",0);
+          costTotal+=q*cost;qtyTotal+=q;
+          if(p!=null){
+            double reserved=p.optDouble("reserved_stock",0);
+            if("shipped".equals(next)){p.put("stock",Math.max(0,p.optDouble("stock")-q));p.put("reserved_stock",Math.max(0,reserved-q));}
+            else if("cancelled".equals(next)&&o.optBoolean("inventory_reserved"))p.put("reserved_stock",Math.max(0,reserved-q));
+          }
+        }
         if("shipped".equals(next)){
-          boolean exists=false;for(int k=0;k<sales.length();k++)if(id==sales.optJSONObject(k).optLong("order_id",-2)){exists=true;break;}
-          if(!exists&&its!=null)for(int j=0;j<its.length();j++){JSONObject it=its.optJSONObject(j);if(it==null)continue;JSONObject p=findLocalProduct(it.optString("product_name"),it.optString("size"));double q=it.optDouble("quantity"),price=it.optDouble("price"),cost=p==null?0:p.optDouble("cost");JSONObject sale=new JSONObject();sale.put("order_id",id);sale.put("product",it.optString("product_name"));sale.put("size",it.optString("size"));sale.put("quantity",q);sale.put("unit_price",price);sale.put("unit_cost",cost);sale.put("cost_total",q*cost);sale.put("shipping",0);sale.put("discount",0);sale.put("total",q*price);sale.put("date",new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm",Locale.US).format(new java.util.Date()));sales.put(sale);}
-          persistSales();
-        }else if("cancelled".equals(next)&&o.optBoolean("inventory_reserved")&&its!=null){for(int j=0;j<its.length();j++){JSONObject it=its.optJSONObject(j);if(it==null)continue;JSONObject p=findLocalProduct(it.optString("product_name"),it.optString("size"));if(p!=null)p.put("reserved_stock",Math.max(0,p.optDouble("reserved_stock")-it.optDouble("quantity")));}persist();}
-        o.put("status",next);o.put("local_state",next);o.put("inventory_reserved",false);persistOrders();refresh();dlg.dismiss();new AlertDialog.Builder(this).setMessage("تم تحديث الطلب: "+orderStatusLabel(next)).setPositiveButton("حسنًا",null).show();
-      }catch(Exception ex){Toast.makeText(this,"حدث خطأ في تحديث الطلب محليًا",Toast.LENGTH_LONG).show();}});
+          boolean exists=false;for(int k=0;k<sales.length();k++){JSONObject old=sales.optJSONObject(k);if(old!=null&&id==old.optLong("order_id",-2)){exists=true;break;}}
+          if(!exists){JSONObject sale=new JSONObject();sale.put("order_id",id);sale.put("product","طلب متجر #"+id);sale.put("size","متعدد");sale.put("quantity",qtyTotal);sale.put("unit_price",0);sale.put("unit_cost",0);sale.put("cost_total",costTotal);sale.put("shipping",0);sale.put("discount",0);sale.put("total",o.optDouble("total"));sale.put("date",new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm",Locale.US).format(new java.util.Date()));sales.put(sale);persistSales();}
+        }
+        persist();o.put("status",next);o.put("local_state",next);o.put("inventory_reserved",false);persistOrders();refresh();refreshSales();
+        Toast.makeText(this,"تم تحديث الطلب: "+orderStatusLabel(next),Toast.LENGTH_LONG).show();
+        if(dlg!=null&&dlg.isShowing())dlg.dismiss();
+      }catch(Exception ex){Toast.makeText(this,"حدث خطأ أثناء تحديث بيانات الطلب",Toast.LENGTH_LONG).show();}});
     }catch(Exception ex){String m=ex.getMessage()==null?"تعذر تحديث حالة الطلب":ex.getMessage();runOnUiThread(()->new AlertDialog.Builder(this).setTitle("تعذر تحديث الطلب").setMessage(m).setPositiveButton("حسنًا",null).show());}}).start();
   }
   private void cloudPatch(String path,JSONObject body)throws Exception{
