@@ -10,6 +10,8 @@ import android.view.Gravity;
 import android.view.View;
 import android.view.inputmethod.InputMethodManager;
 import android.content.Context;
+import android.content.Intent;
+import android.net.Uri;
 import android.widget.*;
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -28,6 +30,7 @@ public class MainActivity extends Activity {
   private final int cream=Color.rgb(250,246,239), pink=Color.rgb(232,190,197), ink=Color.rgb(62,52,53), muted=Color.rgb(130,116,113);
   private JSONArray products, sales, cloudProducts=new JSONArray(), cloudVariants=new JSONArray();
   private TextView salesSummary;
+  private long pendingImageProductId=-1;
   private LinearLayout page, list;
   private TextView summary, cloudStatus;
   private LinearLayout cloudList;
@@ -123,6 +126,68 @@ public class MainActivity extends Activity {
       }
     }).start();
   }
+  private void chooseProductImage(long productId){
+    if(productId<=0){Toast.makeText(this,"معرّف المنتج غير صالح",Toast.LENGTH_LONG).show();return;}
+    pendingImageProductId=productId;
+    Intent intent=new Intent(Intent.ACTION_OPEN_DOCUMENT);
+    intent.setType("image/*");intent.addCategory(Intent.CATEGORY_OPENABLE);
+    startActivityForResult(intent,7101);
+  }
+  @Override protected void onActivityResult(int requestCode,int resultCode,Intent data){
+    super.onActivityResult(requestCode,resultCode,data);
+    if(requestCode!=7101||resultCode!=RESULT_OK||data==null||data.getData()==null)return;
+    Uri uri=data.getData();
+    try{getContentResolver().takePersistableUriPermission(uri,data.getFlags()&Intent.FLAG_GRANT_READ_URI_PERMISSION);}catch(Exception ignored){}
+    final long productId=pendingImageProductId;pendingImageProductId=-1;
+    if(productId<=0)return;
+    if(cloudStatus!=null)cloudStatus.setText("جاري رفع صورة المنتج...");
+    new Thread(()->{
+      try{
+        String mime=getContentResolver().getType(uri);
+        if(mime==null||!mime.startsWith("image/"))throw new Exception("الملف المختار ليس صورة");
+        String ext="jpg";
+        if("image/png".equalsIgnoreCase(mime))ext="png";
+        else if("image/webp".equalsIgnoreCase(mime))ext="webp";
+        else if("image/jpeg".equalsIgnoreCase(mime))ext="jpg";
+        else throw new Exception("اختر صورة JPG أو PNG أو WEBP");
+        byte[] bytes;
+        try(InputStream in=getContentResolver().openInputStream(uri);ByteArrayOutputStream out=new ByteArrayOutputStream()){
+          if(in==null)throw new Exception("تعذر قراءة الصورة");
+          byte[] buf=new byte[8192];int n;while((n=in.read(buf))!=-1){out.write(buf,0,n);if(out.size()>12*1024*1024)throw new Exception("حجم الصورة أكبر من 12 ميجابايت");}
+          bytes=out.toByteArray();
+        }
+        String path="products/"+productId+"_"+java.util.UUID.randomUUID().toString().replace("-","")+"."+ext;
+        String token=prefs.getString("access_token","");
+        if(token.isEmpty())throw new Exception("انتهت جلسة الدخول. سجّل الدخول مرة أخرى.");
+        HttpURLConnection upload=(HttpURLConnection)new URL(SUPABASE_URL+"/storage/v1/object/sakura-products/"+path).openConnection();
+        upload.setRequestMethod("POST");upload.setConnectTimeout(20000);upload.setReadTimeout(30000);upload.setDoOutput(true);
+        upload.setRequestProperty("apikey",SUPABASE_KEY);upload.setRequestProperty("Authorization","Bearer "+token);
+        upload.setRequestProperty("Content-Type",mime);upload.setRequestProperty("x-upsert","false");
+        try(OutputStream os=upload.getOutputStream()){os.write(bytes);}
+        int uploadCode=upload.getResponseCode();InputStream uploadStream=uploadCode>=200&&uploadCode<300?upload.getInputStream():upload.getErrorStream();
+        String uploadBody=readBody(uploadStream);upload.disconnect();
+        if(uploadCode<200||uploadCode>=300)throw new Exception("فشل رفع الصورة ("+uploadCode+"): "+uploadBody);
+        String publicUrl=SUPABASE_URL+"/storage/v1/object/public/sakura-products/"+path;
+        HttpURLConnection update=(HttpURLConnection)new URL(SUPABASE_URL+"/rest/v1/products?id=eq."+productId).openConnection();
+        update.setRequestMethod("PATCH");update.setConnectTimeout(15000);update.setReadTimeout(15000);update.setDoOutput(true);
+        update.setRequestProperty("apikey",SUPABASE_KEY);update.setRequestProperty("Authorization","Bearer "+token);
+        update.setRequestProperty("Content-Type","application/json");update.setRequestProperty("Prefer","return=minimal");
+        JSONObject body=new JSONObject();body.put("image_url",publicUrl);
+        try(OutputStream os=update.getOutputStream()){os.write(body.toString().getBytes(StandardCharsets.UTF_8));}
+        int updateCode=update.getResponseCode();InputStream updateStream=updateCode>=200&&updateCode<300?update.getInputStream():update.getErrorStream();
+        String updateBody=readBody(updateStream);update.disconnect();
+        if(updateCode<200||updateCode>=300)throw new Exception("تم رفع الصورة لكن تعذر تحديث المنتج ("+updateCode+"): "+updateBody);
+        runOnUiThread(()->{for(int i=0;i<cloudProducts.length();i++){JSONObject p=cloudProducts.optJSONObject(i);if(p!=null&&p.optLong("id",-1)==productId)try{p.put("image_url",publicUrl);}catch(Exception ignored){}}renderCloudCatalog();Toast.makeText(this,"تم رفع الصورة وتحديث رابط المنتج في المتجر",Toast.LENGTH_LONG).show();});
+      }catch(Exception e){String msg=e.getMessage()==null?"حدث خطأ أثناء رفع الصورة":e.getMessage();runOnUiThread(()->{if(cloudStatus!=null)cloudStatus.setText(msg);Toast.makeText(this,msg,Toast.LENGTH_LONG).show();});}
+    }).start();
+  }
+  private String readBody(InputStream is)throws Exception{
+    if(is==null)return "";
+    try(InputStream in=is;ByteArrayOutputStream b=new ByteArrayOutputStream()){
+      byte[] buf=new byte[4096];int n;while((n=in.read(buf))!=-1)b.write(buf,0,n);
+      return b.toString("UTF-8");
+    }
+  }
   private JSONArray cloudGet(String path)throws Exception{
     HttpURLConnection c=(HttpURLConnection)new URL(SUPABASE_URL+path).openConnection();
     c.setRequestMethod("GET");c.setConnectTimeout(15000);c.setReadTimeout(15000);
@@ -143,6 +208,9 @@ public class MainActivity extends Activity {
       LinearLayout card=new LinearLayout(this);card.setOrientation(1);card.setPadding(dp(14),dp(12),dp(14),dp(12));card.setBackground(bg(Color.WHITE,15));
       LinearLayout.LayoutParams cp=lp();cp.topMargin=dp(8);cloudList.addView(card,cp);
       card.addView(text(p.optString("name","منتج"),16,true));
+      Button imageButton=button("اختيار / تغيير صورة المنتج");
+      LinearLayout.LayoutParams imageButtonParams=lp();imageButtonParams.topMargin=dp(8);card.addView(imageButton,imageButtonParams);
+      final long cloudId=p.optLong("id",-1);imageButton.setOnClickListener(v->chooseProductImage(cloudId));
       String desc=p.optString("description","");if(!desc.isEmpty()){TextView d=text(desc,12,false);d.setTextColor(muted);card.addView(d);}
       boolean found=false;
       for(int j=0;j<cloudVariants.length();j++){
