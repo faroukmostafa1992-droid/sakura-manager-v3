@@ -32,7 +32,7 @@ public class MainActivity extends Activity {
   private TextView salesSummary;
   private long pendingImageProductId=-1;
   private LinearLayout page, list;
-  private TextView summary, cloudStatus;
+  private TextView summary, cloudStatus;\n  private AlertDialog ordersDialog;
   private LinearLayout cloudList;
   private android.content.SharedPreferences prefs;
   @Override public void onCreate(Bundle b){
@@ -277,7 +277,7 @@ public class MainActivity extends Activity {
     if(pending==0)cards.addView(text("لا توجد طلبات معلقة حاليًا.",14,false));
     if(warning!=null&&!warning.isEmpty())cards.addView(text(warning,12,false));
     box.addView(sc,new LinearLayout.LayoutParams(-1,dp(450)));
-    new AlertDialog.Builder(this).setTitle("طلبات المتجر ("+pending+")").setView(box).setPositiveButton("تحديث",(d,w)->fetchOrders()).setNegativeButton("إغلاق",null).show();
+    ordersDialog=new AlertDialog.Builder(this).setTitle("طلبات المتجر ("+pending+")").setView(box).setPositiveButton("تحديث",(d,w)->fetchOrders()).setNegativeButton("إغلاق",null).create();ordersDialog.show();
   }
   private String orderStatusLabel(String s){if("shipped".equalsIgnoreCase(s))return "تم الشحن";if("cancelled".equalsIgnoreCase(s))return "ملغي";return "طلب جديد";}
   private void changeOrderState(JSONObject o,String next,AlertDialog dlg){
@@ -303,7 +303,7 @@ public class MainActivity extends Activity {
         }
         persist();o.put("status",next);o.put("local_state",next);o.put("inventory_reserved",false);persistOrders();refresh();refreshSales();
         Toast.makeText(this,"تم تحديث الطلب: "+orderStatusLabel(next),Toast.LENGTH_LONG).show();
-        if(dlg!=null&&dlg.isShowing())dlg.dismiss();
+        if(dlg!=null&&dlg.isShowing())dlg.dismiss();if(ordersDialog!=null&&ordersDialog.isShowing())ordersDialog.dismiss();showOrdersDialog("");
       }catch(Exception ex){Toast.makeText(this,"حدث خطأ أثناء تحديث بيانات الطلب",Toast.LENGTH_LONG).show();}});
     }catch(Exception ex){String m=ex.getMessage()==null?"تعذر تحديث حالة الطلب":ex.getMessage();runOnUiThread(()->new AlertDialog.Builder(this).setTitle("تعذر تحديث الطلب").setMessage(m).setPositiveButton("حسنًا",null).show());}}).start();
   }
