@@ -43,7 +43,9 @@ public class MainActivity extends Activity {
     load();
     if(prefs.getString("access_token",null)==null) showLogin(); else render();
   }
-  private void load(){try{products=new JSONArray(prefs.getString("products","[]"));}catch(Exception e){products=new JSONArray();}try{sales=new JSONArray(prefs.getString("sales","[]"));}catch(Exception e){sales=new JSONArray();}try{expenses=new JSONArray(prefs.getString("expenses","[]"));}catch(Exception e){expenses=new JSONArray();}try{orders=new JSONArray(prefs.getString("orders","[]"));}catch(Exception e){orders=new JSONArray();}migrateLegacyReservations();}
+  private void load(){try{products=new JSONArray(prefs.getString("products","[]"));}catch(Exception e){products=new JSONArray();}try{sales=new JSONArray(prefs.getString("sales","[]"));}catch(Exception e){sales=new JSONArray();}try{expenses=new JSONArray(prefs.getString("expenses","[]"));}catch(Exception e){expenses=new JSONArray();}try{orders=new JSONArray(prefs.getString("orders","[]"));}catch(Exception e){orders=new JSONArray();}sanitizeInventoryNumbers();migrateLegacyReservations();}
+  private double safeNumber(JSONObject p,String key){double n=p==null?0:p.optDouble(key,0);return Double.isFinite(n)?n:0;}
+  private void sanitizeInventoryNumbers(){try{for(int i=0;i<products.length();i++){JSONObject p=products.optJSONObject(i);if(p==null)continue;for(String key:new String[]{"stock","reserved_stock","cost","price"}){double n=safeNumber(p,key);if(!p.has(key)||!Double.isFinite(p.optDouble(key,0)))p.put(key,n);}}persist();}catch(Exception ignored){}}
   private void migrateLegacyReservations(){if(prefs.getBoolean("reservation_migration_v1",false))return;try{for(int i=0;i<orders.length();i++){JSONObject o=orders.optJSONObject(i);if(o==null||!o.optBoolean("inventory_reserved"))continue;String state=o.optString("local_state",o.optString("status"));if(!("new".equalsIgnoreCase(state)||"pending".equalsIgnoreCase(state)))continue;JSONArray its=o.optJSONArray("items");if(its==null)continue;for(int j=0;j<its.length();j++){JSONObject it=its.optJSONObject(j);if(it==null)continue;JSONObject p=findLocalProduct(it.optString("product_name"),it.optString("size"));if(p!=null){double q=it.optDouble("quantity");p.put("stock",p.optDouble("stock")+q);p.put("reserved_stock",p.optDouble("reserved_stock")+q);}}}prefs.edit().putBoolean("reservation_migration_v1",true).apply();persist();persistOrders();}catch(Exception ignored){}}
   private void persist(){prefs.edit().putString("products",products.toString()).apply();}
   private void persistSales(){prefs.edit().putString("sales",sales.toString()).apply();}
@@ -447,7 +449,7 @@ public class MainActivity extends Activity {
   }
   private int indexOf(JSONObject obj){for(int i=0;i<products.length();i++)if(products.optJSONObject(i)==obj)return i;return -1;}
   private void remove(int i){if(i<0)return;JSONArray n=new JSONArray();for(int j=0;j<products.length();j++)if(j!=i)n.put(products.opt(j));products=n;persist();refresh();}
-  private String fmt(double n){return String.format(Locale.US,"%s",n==(long)n?String.valueOf((long)n):String.format(Locale.US,"%.2f",n));}
+  private String fmt(double n){if(!Double.isFinite(n))n=0;return String.format(Locale.US,"%s",n==(long)n?String.valueOf((long)n):String.format(Locale.US,"%.2f",n));}
   private String money(double n){return fmt(n)+" ج.م";}
   private void productDialog(int index){
     JSONObject old=index>=0?products.optJSONObject(index):null;
