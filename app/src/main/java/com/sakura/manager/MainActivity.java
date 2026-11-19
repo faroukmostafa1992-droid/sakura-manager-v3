@@ -22,6 +22,7 @@ import java.io.InputStream;
 import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.Locale;
+import java.util.ArrayList;
 
 public class MainActivity extends Activity {
   private static final String SUPABASE_URL="https://hoqsljlpswkvflxnywdp.supabase.co";
@@ -111,7 +112,8 @@ public class MainActivity extends Activity {
     Button addExpense=button("＋ إضافة إعلان / مصروف");LinearLayout.LayoutParams expP=lp();expP.topMargin=dp(8);page.addView(addExpense,expP);addExpense.setOnClickListener(v->expenseDialog());
     Button expenseHistory=button("سجل الإعلانات والمصروفات");LinearLayout.LayoutParams expHistP=lp();expHistP.topMargin=dp(7);page.addView(expenseHistory,expHistP);expenseHistory.setOnClickListener(v->expenseHistoryDialog());
     Button add=button("＋ إضافة منتج جديد");LinearLayout.LayoutParams ap=lp();ap.topMargin=dp(14);page.addView(add,ap);add.setOnClickListener(v->productDialog(-1));
-    Button importCatalog=button("⇄ ربط كتالوج المتجر بالمخزون");LinearLayout.LayoutParams ip=lp();ip.topMargin=dp(8);page.addView(importCatalog,ip);importCatalog.setOnClickListener(v->syncCatalogToInventory());
+    Button inventorySetup=button("＋ إدخال كميات المخزون وتكلفة الشراء");LinearLayout.LayoutParams invp=lp();invp.topMargin=dp(8);page.addView(inventorySetup,invp);inventorySetup.setOnClickListener(v->inventorySetupDialog());
+     Button importCatalog=button("⇄ ربط كتالوج المتجر بالمخزون");LinearLayout.LayoutParams ip=lp();ip.topMargin=dp(8);page.addView(importCatalog,ip);importCatalog.setOnClickListener(v->syncCatalogToInventory());
     TextView h=text("المنتجات",19,true);h.setPadding(0,dp(24),0,dp(10));page.addView(h);
     list=new LinearLayout(this);list.setOrientation(1);page.addView(list);refresh();
     TextView cloudTitle=text("كتالوج المتجر المباشر",19,true);cloudTitle.setPadding(0,dp(26),0,dp(8));page.addView(cloudTitle);
@@ -451,6 +453,28 @@ public class MainActivity extends Activity {
   private void remove(int i){if(i<0)return;JSONArray n=new JSONArray();for(int j=0;j<products.length();j++)if(j!=i)n.put(products.opt(j));products=n;persist();refresh();}
   private String fmt(double n){if(!Double.isFinite(n))n=0;return String.format(Locale.US,"%s",n==(long)n?String.valueOf((long)n):String.format(Locale.US,"%.2f",n));}
   private String money(double n){return fmt(n)+" ج.م";}
+  private void inventorySetupDialog(){
+    if(products.length()==0){Toast.makeText(this,"اربط كتالوج المتجر أولاً أو أضف المنتجات",Toast.LENGTH_LONG).show();return;}
+    LinearLayout form=new LinearLayout(this);form.setOrientation(1);form.setPadding(dp(14),dp(8),dp(14),dp(8));form.setLayoutDirection(View.LAYOUT_DIRECTION_RTL);
+    ArrayList<JSONObject> rows=new ArrayList<>();ArrayList<EditText> quantities=new ArrayList<>();ArrayList<EditText> costs=new ArrayList<>();
+    form.addView(label("اكتب الكمية الموجودة فعليًا وتكلفة شراء الوحدة لكل مقاس. الأسعار تظل كما هي في الكتالوج."));
+    for(int i=0;i<products.length();i++){
+      JSONObject p=products.optJSONObject(i);if(p==null)continue;rows.add(p);
+      TextView heading=text(p.optString("name","منتج")+" • "+p.optString("size","Full Size"),16,true);heading.setPadding(0,dp(12),0,dp(4));form.addView(heading);
+      EditText q=field("الكمية الفعلية بالمخزون",fmt(safeNumber(p,"stock")));q.setInputType(8194);form.addView(q);quantities.add(q);
+      EditText cost=field("تكلفة شراء الوحدة بالجنيه",fmt(safeNumber(p,"cost")));cost.setInputType(8194);form.addView(cost);costs.add(cost);
+      View divider=new View(this);divider.setBackgroundColor(Color.rgb(235,226,222));LinearLayout.LayoutParams dpv=lp();dpv.height=dp(1);dpv.topMargin=dp(8);form.addView(divider,dpv);
+    }
+    ScrollView scroll=new ScrollView(this);scroll.setFillViewport(false);scroll.addView(form);
+    new AlertDialog.Builder(this).setTitle("تحديث المخزون والتكلفة").setView(scroll).setNegativeButton("إلغاء",null).setPositiveButton("حفظ الكل",(d,w)->{
+      try{
+        double[] qv=new double[rows.size()],cv=new double[rows.size()];
+        for(int i=0;i<rows.size();i++){qv[i]=number(quantities.get(i));cv[i]=number(costs.get(i));if(!Double.isFinite(qv[i])||!Double.isFinite(cv[i])||qv[i]<0||cv[i]<0)throw new Exception();}
+        for(int i=0;i<rows.size();i++){rows.get(i).put("stock",qv[i]);rows.get(i).put("cost",cv[i]);if(!rows.get(i).has("reserved_stock"))rows.get(i).put("reserved_stock",0);}
+        persist();refresh();Toast.makeText(this,"تم حفظ كميات المخزون وتكاليف الشراء لكل المنتجات",Toast.LENGTH_LONG).show();
+      }catch(Exception e){Toast.makeText(this,"راجع الكميات والتكاليف: يجب إدخال أرقام صحيحة غير سالبة",Toast.LENGTH_LONG).show();}
+    }).show();
+  }
   private void productDialog(int index){
     JSONObject old=index>=0?products.optJSONObject(index):null;
     LinearLayout form=new LinearLayout(this);form.setOrientation(1);form.setPadding(dp(18),dp(8),dp(18),dp(4));form.setLayoutDirection(View.LAYOUT_DIRECTION_RTL);
