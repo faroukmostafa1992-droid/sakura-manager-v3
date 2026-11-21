@@ -1,3 +1,11 @@
+// Preview login gate. Client-side only; not suitable for production security.
+const PREVIEW_PASSWORD_HASH="78237b79b29e8c06d5505818e4080b8b9c63c3d13c1ffc33205b29c934e43c46";
+const AUTH_KEY="sakura-manager-preview-auth";
+const loginGate=document.getElementById("loginGate");const shell=document.querySelector(".shell");
+function setPreviewAuth(on){localStorage.setItem(AUTH_KEY,on?"1":"0");loginGate.classList.toggle("hidden",on);shell.classList.toggle("hidden",!on)}
+setPreviewAuth(localStorage.getItem(AUTH_KEY)==="1");
+document.getElementById("loginSubmit").addEventListener("click",async()=>{const email=document.getElementById("loginEmail").value.trim(),password=document.getElementById("loginPassword").value,err=document.getElementById("loginError");if(!email||!email.includes("@")){err.textContent="أدخل بريدًا إلكترونيًا صحيحًا";return}const digest=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(password));const hash=[...new Uint8Array(digest)].map(x=>x.toString(16).padStart(2,"0")).join("");if(hash!==PREVIEW_PASSWORD_HASH){err.textContent="كلمة المرور غير صحيحة";return}err.textContent="";setPreviewAuth(true)});
+document.getElementById("loginPassword").addEventListener("keydown",e=>{if(e.key==="Enter")document.getElementById("loginSubmit").click()});
 // Sakura Manager — demo-only local data model. Not connected to production database.
 const statusNames={new:"جديد",confirmed:"تم التأكيد",preparing:"قيد التجهيز",delivery:"خرج للتوصيل",delivered:"تم التسليم",cancelled:"ملغي"};
 const statusClass={new:"s-new",confirmed:"s-confirmed",preparing:"s-preparing",delivery:"s-delivery",delivered:"s-delivered",cancelled:"s-cancelled"};
@@ -36,6 +44,7 @@ document.querySelector("#reportSales").innerHTML=money(sales);document.querySele
 }
 function renderAll(){renderRecent();renderOrders();renderProducts();renderInventory();renderLow();calc()}
 renderAll();
+const logoutBtn=document.createElement("button");logoutBtn.className="logout-preview";logoutBtn.textContent="تسجيل خروج";logoutBtn.onclick=()=>{localStorage.removeItem(AUTH_KEY);setPreviewAuth(false)};document.querySelector(".sidebar-bottom").appendChild(logoutBtn);
 document.querySelectorAll(".nav").forEach(b=>b.addEventListener("click",()=>switchPage(b.dataset.page)));
 document.querySelectorAll("[data-go]").forEach(b=>b.addEventListener("click",()=>switchPage(b.dataset.go)));
 function switchPage(page){document.querySelectorAll(".nav").forEach(n=>n.classList.toggle("active",n.dataset.page===page));document.querySelectorAll(".page").forEach(p=>p.classList.toggle("active",p.id==="page-"+page));const names={overview:"نظرة عامة",orders:"إدارة الطلبات",products:"المنتجات",inventory:"المخزون",expenses:"المصروفات",reports:"التقارير"};document.querySelector("#pageTitle").textContent=names[page]||"Sakura Manager"}
